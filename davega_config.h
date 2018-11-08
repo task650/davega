@@ -31,7 +31,7 @@
 #define MAX_SPEED_KPH 50
 
 // Set to true to display the distance in miles and the speed in mph.
-#define IMPERIAL_UNITS false
+#define IMPERIAL_UNITS true
 
 #define BATTERY_S 12  // number of battery cells
 #define BATTERY_MAX_MAH 8000  // battery capacity in mAh
