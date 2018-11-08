@@ -1,3 +1,5 @@
+#include <TFT_22_ILI9225.h>
+
 /*
     Copyright 2018 Jan Pomikalek <jan.pomikalek@gmail.com>
 
