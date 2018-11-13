@@ -22,8 +22,9 @@
 
 #define VESC_COUNT 2  // number of controllers: 1 = single, 2 = dual
 #define MOTOR_POLE_PAIRS 7
-#define WHEEL_CIRCUMFERENCE_MM 100
-#define GEAR_RATIO 2.5
+#define WHEEL_CIRCUMFERENCE_MM 604
+#define MOTOR_PULLEY_TEETH 16
+#define WHEEL_PULLEY_TEETH 40
 
 // Affects the speed indicator. If MAX_SPEED_KPH is exceeded, no major disaster will happen.
 // The speed indicator will merely indicate the current speed as the max speed (all blue rectangles
@@ -110,7 +111,8 @@
 #define EEPROM_UPDATE_MIN_DELAY_ON_STOP 10000
 
 // Hold button 1 for this time to reset trip distance.
-#define TRIP_RESET_TIME 3000  // ms
+// Hold button 2 for this time to reset the Coulomb counter.
+#define COUNTER_RESET_TIME 3000  // ms
 
 // This corresponds (more or less) to how often data is read from VESC.
 #define UPDATE_DELAY 50  // ms

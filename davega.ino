@@ -35,6 +35,8 @@
 #endif
 
 #define BUTTON_1_PIN A3
+#define BUTTON_2_PIN A2
+#define BUTTON_3_PIN A1
 #define LEN(X) (sizeof(X) / sizeof(X[0]))
 
 const float discharge_ticks[] = DISCHARGE_TICKS;
@@ -50,11 +52,13 @@ int32_t last_eeprom_update_on_stop;
 int32_t last_rpm;
 vesc_comm_fault_code last_fault_code;
 uint32_t button_1_last_up_time = 0;
+uint32_t button_2_last_up_time = 0;
 
 char fw_version_buffer[6];
 
 int32_t rotations_to_meters(int32_t rotations) {
-    return (rotations / MOTOR_POLE_PAIRS / GEAR_RATIO) * WHEEL_CIRCUMFERENCE_MM / 1000;
+    float gear_ratio = float(WHEEL_PULLEY_TEETH) / float(MOTOR_PULLEY_TEETH);
+    return (rotations / MOTOR_POLE_PAIRS / gear_ratio) * WHEEL_CIRCUMFERENCE_MM / 1000;
 }
 
 float erpm_to_kph(uint32_t erpm) {
@@ -130,6 +134,8 @@ void set_volts(float volts) {
 
 void setup() {
     pinMode(BUTTON_1_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_2_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_3_PIN, INPUT_PULLUP);
 
 #ifdef DEBUG
     Serial.begin(115200);
@@ -151,7 +157,7 @@ void setup() {
     display_update_battery_indicator(0.0, true);
     display_update_speed_indicator(0.0, true);
     set_volts(eeprom_read_volts());
-    display_set_mah(BATTERY_MAX_MAH - eeprom_read_mah_spent());
+    display_set_mah(BATTERY_MAX_MAH * BATTERY_USABLE_CAPACITY - eeprom_read_mah_spent());
     display_set_trip_distance(eeprom_read_trip_distance());
     display_set_total_distance(eeprom_read_total_distance());
     display_set_speed(0);
@@ -196,6 +202,9 @@ void loop() {
     if (digitalRead(BUTTON_1_PIN) == HIGH)
         button_1_last_up_time = millis();
 
+    if (digitalRead(BUTTON_2_PIN) == HIGH)
+        button_2_last_up_time = millis();
+
     uint8_t bytes_read = vesc_comm_fetch_packet(vesc_packet);
 
     if (!vesc_comm_is_expected_packet(vesc_packet, bytes_read)) {
@@ -219,8 +228,22 @@ void loop() {
     int32_t vesc_mah_spent = VESC_COUNT * (vesc_comm_get_amphours_discharged(vesc_packet) -
                                            vesc_comm_get_amphours_charged(vesc_packet));
     int32_t mah_spent = initial_mah_spent + vesc_mah_spent;
-    int32_t mah = BATTERY_MAX_MAH - mah_spent;
-    display_set_mah(mah);
+    int32_t mah = BATTERY_MAX_MAH * BATTERY_USABLE_CAPACITY - mah_spent;
+
+    uint32_t button_2_down_elapsed = millis() - button_2_last_up_time;
+    if (button_2_down_elapsed > COUNTER_RESET_TIME) {
+        // reset coulomb counter
+        mah = voltage_to_percent(volts) * BATTERY_MAX_MAH * BATTERY_USABLE_CAPACITY;
+        mah_spent = BATTERY_MAX_MAH * BATTERY_USABLE_CAPACITY - mah;
+        eeprom_write_mah_spent(mah_spent);
+        initial_mah_spent = mah_spent - vesc_mah_spent;
+    }
+
+    // dim mAh if the counter is about to be reset
+    uint16_t mah_brightness = 255 - min(255.0 * button_2_down_elapsed / COUNTER_RESET_TIME, 255);
+    uint16_t mah_color = display_make_color(mah_brightness, mah_brightness, mah_brightness);
+
+    display_set_mah(mah, mah_color);
 
     int32_t rpm = vesc_comm_get_rpm(vesc_packet);
     float kph = max(erpm_to_kph(rpm), 0);
@@ -229,14 +252,14 @@ void loop() {
     int32_t tachometer = rotations_to_meters(vesc_comm_get_tachometer(vesc_packet) / 6);
 
     uint32_t button_1_down_elapsed = millis() - button_1_last_up_time;
-    if (button_1_down_elapsed > TRIP_RESET_TIME) {
+    if (button_1_down_elapsed > COUNTER_RESET_TIME) {
         // reset trip distance
         eeprom_write_trip_distance(0);
         initial_trip_distance = -tachometer;
     }
 
     // dim trip distance if it's about to be reset
-    uint16_t trip_distance_brightness = 255 - min(255.0 * button_1_down_elapsed / TRIP_RESET_TIME, 255);
+    uint16_t trip_distance_brightness = 255 - min(255.0 * button_1_down_elapsed / COUNTER_RESET_TIME, 255);
     uint16_t trip_distance_color = display_make_color(
             trip_distance_brightness, trip_distance_brightness, trip_distance_brightness);
 
